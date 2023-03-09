@@ -42,13 +42,13 @@ You can find the latest build details on the [Docker Hub](https://hub.docker.com
 1. Pull in the image
 
   ```
-    docker pull laraedit/laraedit
+    docker pull mahshamim/laraedit:8.1
   ```  
 
 2. Run the container
 
   ```
-    docker run -p 80:80 -v /path/to/your/app:/var/www/html/app laraedit/laraedit
+    docker run -p 80:80 -v /path/to/your/app:/var/www/html/app mahshamim/laraedit:8.1
   ```
 
 # MySQL Details
