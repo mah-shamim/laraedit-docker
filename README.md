@@ -14,7 +14,7 @@ You can find the latest build details on the [Docker Hub](https://hub.docker.com
 # What works
 
 - [x] Nginx 1.18.0
-- [x] PHP 8.1
+- [x] PHP 8.2
 - [ ] SQLite
 - [x] MySQL 8.0
 - [ ] Redis
