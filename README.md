@@ -4,7 +4,7 @@ Dockerized version of Laravel Homestead
 
 # Documentation
 
-For now you can [check out the wiki](https://github.com/mahshamim/laraedit-docker/wiki) for details on using the
+For now, you can [check out the wiki](https://github.com/mahshamim/laraedit-docker/wiki) for details on using the
 container. Once the container is stable, I will add more instructions here in the readme.
 
 # Build Information
@@ -19,7 +19,7 @@ You can find the latest build details on the [Docker Hub](https://hub.docker.com
 - [x] MySQL 8.0
 - [ ] Redis
 - [x] NodeJS
-- [ ] PostgreSQL
+- [ ] PostgresSQL
 - [ ] Beanstalkd
 - [ ] Blackfire
 - [ ] Bower
