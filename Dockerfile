@@ -50,9 +50,10 @@ VOLUME ["/var/cache/nginx"]
 VOLUME ["/var/log/nginx"]
 
 # install php
-RUN apt-get install -y php php-fpm php-mysql php-curl php-json php-cgi php-mbstring php-xmlrpc \
+RUN add-apt-repository ppa:ondrej/php && \
+    apt-get install -y php php-fpm php-mysql php-curl php-json php-cgi php-mbstring php-xmlrpc \
     php-soap php-gd php-xml php-intl php-cli php-zip php-xdebug php-common php-imap php-readline \
-    php-bcmath php-imagick
+    php-bcmath php-imagick php-ldap php-bz2 php-pgsql php8.2-opcache
     
 COPY fastcgi_params /etc/nginx/
 RUN sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/8.2/cli/php.ini \
