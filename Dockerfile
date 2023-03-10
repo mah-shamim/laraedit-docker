@@ -1,11 +1,14 @@
 FROM ubuntu:latest
-LABEL MD ARIFUL HAQUE <mah.shamim@gmail.com>
+LABEL maintainer="MD ARIFUL HAQUE <mah.shamim@gmail.com>"
 
 # set some environment variables
 ENV APP_NAME app
 ENV APP_EMAIL app@example.com
 ENV APP_DOMAIN app.dev
 ENV DEBIAN_FRONTEND noninteractive
+
+# Set root password to root, format is 'user:password'.
+RUN echo 'root:root' | chpasswd
 
 # upgrade the container
 RUN apt-get update && apt-get upgrade -y
@@ -33,7 +36,7 @@ RUN echo "LC_ALL=en_US.UTF-8" >> /etc/default/locale  && \
 COPY .bash_aliases /root
 
 # install nginx
-RUN apt-get install -y nginx
+RUN apt-get install -y nginx openssh-server
 #RUN apt-get install -y --allow-downgrades --allow-remove-essential --allow-change-held-packages nginx
 COPY homestead /etc/nginx/sites-available/
 RUN rm -rf /etc/nginx/sites-available/default \
@@ -73,7 +76,11 @@ RUN sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/8.2/cli/ph
     && sed -i -e "s/pm.max_spare_servers = 3/pm.max_spare_servers = 4/g" /etc/php/8.2/fpm/pool.d/www.conf \
     && sed -i -e "s/pm.max_requests = 500/pm.max_requests = 200/g" /etc/php/8.2/fpm/pool.d/www.conf \
     && sed -i -e "s/;listen.mode = 0660/listen.mode = 0750/g" /etc/php/8.2/fpm/pool.d/www.conf \
-    && find /etc/php/8.2/cli/conf.d/ -name "*.ini" -exec sed -i -re 's/^(\s*)#(.*)/\1;\2/g' {} \;
+    && find /etc/php/8.2/cli/conf.d/ -name "*.ini" -exec sed -i -re 's/^(\s*)#(.*)/\1;\2/g' {} \; \
+    # SSH server
+    && mkdir -p /var/run/sshd \
+    # Allow root login via password
+    && sed -ri 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' /etc/ssh/sshd_config
 
 RUN mkdir -p /run/php/ && chown -Rf www-data.www-data /run/php
 
@@ -88,22 +95,31 @@ RUN curl -sS https://getcomposer.org/installer | php && \
 # install sqlite 
 RUN apt-get install -y sqlite3 libsqlite3-dev
 
-# install mysql 
+# install mysql
 RUN echo mysql-server mysql-server/root_password password $DB_PASS | debconf-set-selections; \
     echo mysql-server mysql-server/root_password_again password $DB_PASS | debconf-set-selections; \
     apt-get install -y mysql-server && \
     echo "[mysqld]" >> /etc/mysql/my.cnf && \
     echo "default_password_lifetime = 0" >> /etc/mysql/my.cnf && \
-    sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/my.cnf
-RUN find /var/lib/mysql -exec touch {} \; \
+    sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/my.cnf && \
+    sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf && \
+    find /var/lib/mysql -exec touch {} \; \
     && service mysql start \
     && sleep 10s \
-    && echo "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '12345678'; \
+    && echo "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'secret'; \
     GRANT ALL ON *.* TO root@localhost; \
     CREATE USER 'homestead'@'%' IDENTIFIED BY 'secret'; \
     GRANT ALL ON *.* TO 'homestead'@'%'; \
     FLUSH PRIVILEGES; \
     CREATE DATABASE homestead;" | mysql
+#    GRANT ALL ON *.* TO root@'0.0.0.0' IDENTIFIED BY 'secret' WITH GRANT OPTION; \
+#    CREATE USER 'homestead'@'0.0.0.0' IDENTIFIED BY 'secret'; \
+#    GRANT ALL ON *.* TO 'homestead'@'0.0.0.0' IDENTIFIED BY 'secret' WITH GRANT OPTION; \
+#    GRANT ALL ON *.* TO 'homestead'@'%' IDENTIFIED BY 'secret' WITH GRANT OPTION; \
+#    FLUSH PRIVILEGES; \
+#    CREATE DATABASE homestead;
+
+
 VOLUME ["/var/lib/mysql"]
 
 # install nodejs
@@ -131,6 +147,9 @@ RUN apt-get install -y redis-server
 RUN apt-get install -y supervisor && mkdir -p /var/log/supervisor
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
+# copy supervisor config file to start openssh-server
+COPY openssh-server.conf /etc/supervisor/conf.d/openssh-server.conf
+
 VOLUME ["/var/log/supervisor"]
 
 # clean up our mess
@@ -144,7 +163,11 @@ RUN apt-get remove --purge -y software-properties-common \
     && rm -rf /usr/share/man/??_*
 
 # expose ports
-EXPOSE 80 443 3306 6379
+EXPOSE 22
+EXPOSE 80
+EXPOSE 443
+EXPOSE 3306
+EXPOSE 6379
 
 # set container entrypoints
 ENTRYPOINT ["/bin/bash","-c"]
