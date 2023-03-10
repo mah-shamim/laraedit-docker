@@ -1,5 +1,5 @@
 FROM ubuntu:latest
-LABEL MD ARIFUL HAQUE <mah.shamim@gmail.com>
+LABEL maintainer="MD ARIFUL HAQUE <mah.shamim@gmail.com>"
 
 # set some environment variables
 ENV APP_NAME app
@@ -84,8 +84,9 @@ RUN echo mysql-server mysql-server/root_password password $DB_PASS | debconf-set
     apt-get install -y mysql-server && \
     echo "[mysqld]" >> /etc/mysql/my.cnf && \
     echo "default_password_lifetime = 0" >> /etc/mysql/my.cnf && \
-    sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/my.cnf
-RUN find /var/lib/mysql -exec touch {} \; \
+    sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/my.cnf \
+    && sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf \
+    && find /var/lib/mysql -exec touch {} \; \
     && service mysql start \
     && sleep 10s \
     && echo "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '12345678'; \
