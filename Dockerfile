@@ -7,6 +7,9 @@ ENV APP_EMAIL app@example.com
 ENV APP_DOMAIN app.dev
 ENV DEBIAN_FRONTEND noninteractive
 
+# Set root password to root, format is 'user:password'.
+RUN echo 'root:root' | chpasswd
+
 # upgrade the container
 RUN apt-get update && apt-get upgrade -y
 
@@ -27,14 +30,14 @@ RUN echo "LC_ALL=en_US.UTF-8" >> /etc/default/locale  && \
 COPY .bash_aliases /root
 
 # install nginx
-RUN apt-get install -y nginx
+RUN apt-get install -y nginx openssh-server
 #RUN apt-get install -y --allow-downgrades --allow-remove-essential --allow-change-held-packages nginx
 COPY homestead /etc/nginx/sites-available/
 RUN rm -rf /etc/nginx/sites-available/default \
     && rm -rf /etc/nginx/sites-enabled/default \
     && ln -fs "/etc/nginx/sites-available/homestead" "/etc/nginx/sites-enabled/homestead" \
     && sed -i -e"s/keepalive_timeout\s*65/keepalive_timeout 2/" /etc/nginx/nginx.conf \
-    && sed -i -e"s/keepalive_timeout 2/keepalive_timeout 2;\n\tclient_max_body_size 100m/" /etc/nginx/nginx.conf \
+    && sed -i -e"s/keepalive_timeout 2/keepalive_timeout 2;\n\t client_max_body_size 100m/" /etc/nginx/nginx.conf \
     && echo "daemon off;" >> /etc/nginx/nginx.conf \
     && usermod -u 1000 www-data \
     && chown -Rf www-data.www-data /var/www/html/ \
@@ -46,7 +49,7 @@ VOLUME ["/var/log/nginx"]
 # install php
 RUN apt-get install -y php php-fpm php-mysql php-curl php-json php-cgi php-mbstring php-xmlrpc \
     php-soap php-gd php-xml php-intl php-cli php-zip php-xdebug php-common php-imap php-readline \
-    php-bcmath php-imagick
+    php-bcmath php-imagick php-imagick php-ldap php-bz2 php-pgsql
     
 COPY fastcgi_params /etc/nginx/
 RUN sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/8.1/cli/php.ini \
@@ -66,7 +69,12 @@ RUN sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/8.1/cli/ph
     && sed -i -e "s/pm.max_spare_servers = 3/pm.max_spare_servers = 4/g" /etc/php/8.1/fpm/pool.d/www.conf \
     && sed -i -e "s/pm.max_requests = 500/pm.max_requests = 200/g" /etc/php/8.1/fpm/pool.d/www.conf \
     && sed -i -e "s/;listen.mode = 0660/listen.mode = 0750/g" /etc/php/8.1/fpm/pool.d/www.conf \
-    && find /etc/php/8.1/cli/conf.d/ -name "*.ini" -exec sed -i -re 's/^(\s*)#(.*)/\1;\2/g' {} \;
+    && find /etc/php/8.1/cli/conf.d/ -name "*.ini" -exec sed -i -re 's/^(\s*)#(.*)/\1;\2/g' {} \; \
+    # SSH server
+    && mkdir -p /var/run/sshd \
+    # Allow root login via password
+    && sed -ri 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' /etc/ssh/sshd_config
+
 
 RUN mkdir -p /run/php/ && chown -Rf www-data.www-data /run/php
 
@@ -76,16 +84,18 @@ RUN curl -sS https://getcomposer.org/installer | php && \
     printf "\nPATH=\"~/.composer/vendor/bin:\$PATH\"\n" | tee -a ~/.bashrc
 
 # install sqlite 
-RUN apt-get install -y sqlite3 libsqlite3-dev
-
-# install mysql 
-RUN echo mysql-server mysql-server/root_password password $DB_PASS | debconf-set-selections; \
+RUN apt-get install -y sqlite3 libsqlite3-dev \
+    # install mysql
+   && echo mysql-server mysql-server/root_password password $DB_PASS | debconf-set-selections; \
     echo mysql-server mysql-server/root_password_again password $DB_PASS | debconf-set-selections; \
-    apt-get install -y mysql-server && \
+    apt-get install -y mysql-server libmysqlclient-dev libmysqlclient15-dev libmysqlclient20-dev&& \
     echo "[mysqld]" >> /etc/mysql/my.cnf && \
     echo "default_password_lifetime = 0" >> /etc/mysql/my.cnf && \
     sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/my.cnf \
     && sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf \
+    && git clone https://github.com/mysqludf/lib_mysqludf_sys \
+    #&& sed -i '/^LIBDIR/s/LIBDIR.*=.*/LIBDIR=/usr/lib/mysql/plugin' /lib_mysqludf_sys/Makefile \
+    #&& lib_mysqludf_sys/install.sh \
     && find /var/lib/mysql -exec touch {} \; \
     && service mysql start \
     && sleep 10s \
@@ -95,7 +105,9 @@ RUN echo mysql-server mysql-server/root_password password $DB_PASS | debconf-set
     GRANT ALL ON *.* TO 'homestead'@'%'; \
     FLUSH PRIVILEGES; \
     CREATE DATABASE homestead;" | mysql
+
 VOLUME ["/var/lib/mysql"]
+
 
 # install nodejs
 RUN apt-get install -y nodejs
@@ -118,6 +130,8 @@ RUN apt-get install -y redis-server
 # install supervisor
 RUN apt-get install -y supervisor && mkdir -p /var/log/supervisor
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# copy supervisor config file to start openssh-server
+COPY openssh-server.conf /etc/supervisor/conf.d/openssh-server.conf
 
 VOLUME ["/var/log/supervisor"]
 
@@ -132,6 +146,7 @@ RUN apt-get remove --purge -y software-properties-common \
     && rm -rf /usr/share/man/??_*
 
 # expose ports
+EXPOSE 22
 EXPOSE 80
 EXPOSE 443
 EXPOSE 3306
