@@ -10,65 +10,70 @@ ENV LANG=en_US.UTF-8 \
     APP_EMAIL=app@example.com \
     APP_DOMAIN=app.dev
 
-# Set root password
-RUN echo 'root:root' | chpasswd
-
-# upgrade the container
-RUN apt-get update && apt-get upgrade -y
-
-# install some prerequisites
-RUN apt-get update && apt-get install -y --no-install-recommends apt-utils
-
-RUN apt-get install -y software-properties-common curl \
+# Set root password to root, format is 'user:password'.
+RUN echo 'root:root' | chpasswd && \
+    # upgrade the container \
+    apt-get update && apt-get upgrade -y && \
+    # install some prerequisites
+    apt-get update && apt-get install -y --no-install-recommends apt-utils software-properties-common curl \
     build-essential dos2unix gcc git libmcrypt4 libpcre3-dev python3-pip wget zip \
     unattended-upgrades whois vim debconf-utils libnotify-bin locales \
-    cron libpng-dev unzip memcached make
-
-# set the locale
-RUN echo "LC_ALL=en_US.UTF-8" >> /etc/default/locale  && \
+    cron libpng-dev unzip memcached make nodejs nginx openssh-server redis-server supervisor \
+    sqlite3 libsqlite3-dev mysql-server libmysqlclient-dev libffi-dev && \
+    # install php8.3
+    add-apt-repository ppa:ondrej/php && \
+    apt-get install -y php8.3 php8.3-amqp php8.3-ast php8.3-bcmath php8.3-bz2 php8.3-cgi php8.3-cli php8.3-common php8.3-curl \
+    php8.3-dba php8.3-dev php8.3-ds php8.3-enchant php8.3-exif \
+    php8.3-facedetect php8.3-fpm php8.3-ffi php8.3-fileinfo php8.3-ftp \
+    php8.3-gd php8.3-gearman php8.3-gmp php8.3-gnupg php8.3-gettext \
+    php8.3-igbinary php8.3-imagick php8.3-imap php8.3-interbase php8.3-intl php-json \
+    php8.3-ldap php8.3-libvirt-php php8.3-mailparse php8.3-maxminddb php8.3-mbstring \
+    php8.3-mcrypt php8.3-memcache php8.3-memcached php8.3-mongodb php8.3-msgpack php8.3-mysql \
+    php8.3-oauth php8.3-odbc php8.3-opcache \
+    php8.3-pgsql php8.3-phpdbg php8.3-pinba php8.3-ps php8.3-pspell php8.3-psr \
+    php8.3-raphf php8.3-readline php8.3-redis php8.3-rrd \
+    php8.3-smbclient php8.3-snmp php8.3-soap php8.3-solr php8.3-sqlite3 php8.3-ssh2 php8.3-sybase \
+    php8.3-tideways php8.3-tidy \
+    php8.3-uopz php8.3-uploadprogress php8.3-uuid \
+    php8.3-xdebug php8.3-xml php8.3-xmlrpc php8.3-xsl \
+    php8.3-yac php8.3-yaml \
+    php8.3-zip php8.3-zmq \
+    php-bacon-qr-code php-brick-math php-brick-varexporter \
+    php-cache-integration-tests php-cache-tag-interop php-cas php-christianriesen-base32 php-christianriesen-otp \
+    php-code-lts-u2f-php-server php-codecoverage php-codeigniter-framework php-composer-class-map-generator \
+    php-email-validator php-embed php-facedetect-all-dev php-google-recaptcha php-jshrink php-json-schema \
+    php-laravel-serializable-closure phpunit-cli-parser phpunit-code-unit pkg-php-tools \
+    wordpress-shibboleth wordpress-xrds-simple \
+    php8.3-mysqli php8.3-tokenizer && \
+    mkdir -p /run/php/ && chown -Rf www-data.www-data /run/php && \
+    #php8.3-oci8 php-sysvshm php8.3-gmagick php-symfony
+    # install composer
+    curl -sS https://getcomposer.org/installer | php && \
+    mv composer.phar /usr/local/bin/composer && \
+    printf "\nPATH=\"~/.composer/vendor/bin:\$PATH\"\n" | tee -a ~/.bashrc && \
+    # set the locale \
+    echo "LC_ALL=en_US.UTF-8" >> /etc/default/locale  && \
     locale-gen en_US.UTF-8  && \
     ln -sf /usr/share/zoneinfo/UTC /etc/localtime
 
-# setup bash
+# setup bash \
 COPY .bash_aliases /root
 
-# install nginx
-RUN apt-get install -y nginx openssh-server libssl-dev libcurl4-openssl-dev libxml2-dev libzip-dev
-#RUN apt-get install -y --allow-downgrades --allow-remove-essential --allow-change-held-packages nginx
+# configur nginx
 COPY homestead /etc/nginx/sites-available/
 RUN rm -rf /etc/nginx/sites-available/default \
     && rm -rf /etc/nginx/sites-enabled/default \
     && ln -fs "/etc/nginx/sites-available/homestead" "/etc/nginx/sites-enabled/homestead" \
     && sed -i -e"s/keepalive_timeout\s*65/keepalive_timeout 2/" /etc/nginx/nginx.conf \
-    && sed -i -e"s/keepalive_timeout 2/keepalive_timeout 2;\n\tclient_max_body_size 100m/" /etc/nginx/nginx.conf \
-    && echo "daemon off;" >> /etc/nginx/nginx.conf
-
-# Adjust permissions and worker processes
-#RUN if ! id -u www-data | grep -q 1000; then \
-    #usermod -u 1000 www-data; \
-    #fi \
-    #&& chown -Rf www-data:www-data /var/www/html/ \
-    #&& sed -i -e"s/worker_processes 1/worker_processes 5/" /etc/nginx/nginx.conf
-RUN chown -Rf www-data:www-data /var/www/html/ \
+    && sed -i -e"s/keepalive_timeout 2/keepalive_timeout 2;\n\t client_max_body_size 100m/" /etc/nginx/nginx.conf \
+    && echo "daemon off;" >> /etc/nginx/nginx.conf \
+    && chown -Rf www-data:www-data /var/www/html/ \
     && sed -i -e"s/worker_processes 1/worker_processes 5/" /etc/nginx/nginx.conf
-
 VOLUME ["/var/www/html/app"]
 VOLUME ["/var/cache/nginx"]
 VOLUME ["/var/log/nginx"]
 
-# install php
-#RUN add-apt-repository ppa:ondrej/php && \
-    #apt-get install -y php php-fpm php-mysql php-curl php-json php-cgi php-mbstring php-xmlrpc \
-    #php-soap php-gd php-xml php-intl php-cli php-zip php-xdebug php-common php-imap php-readline \
-    #php-bcmath php-imagick php-imagick php-ldap php-bz2 php-pgsql
-
-RUN add-apt-repository ppa:ondrej/php && \
-    apt-get update && \
-    apt-get install -y php8.3 php8.3-fpm php8.3-mysql php8.3-curl php-json php8.3-cgi \
-    php8.3-mbstring php8.3-xmlrpc php8.3-soap php8.3-gd php8.3-xml php8.3-intl php8.3-cli \
-    php8.3-zip php8.3-xdebug php8.3-common php8.3-imap php8.3-readline php8.3-bcmath \
-    php8.3-imagick php8.3-ldap php8.3-bz2 php8.3-pgsql php8.3-opcache php8.3-redis php8.3-sqlite3
-
+# configur php
 COPY fastcgi_params /etc/nginx/
 RUN sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/8.3/cli/php.ini \
     && sed -i "s/display_errors = .*/display_errors = On/" /etc/php/8.3/cli/php.ini \
@@ -79,6 +84,22 @@ RUN sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/8.3/cli/ph
     && sed -i "s/upload_max_filesize = .*/upload_max_filesize = 100M/" /etc/php/8.3/fpm/php.ini \
     && sed -i "s/post_max_size = .*/post_max_size = 100M/" /etc/php/8.3/fpm/php.ini \
     && sed -i "s/;date.timezone.*/date.timezone = UTC/" /etc/php/8.3/fpm/php.ini \
+    && sed -i "/extension=mongodb.so/d" /etc/php/8.3/cli/php.ini \
+    && echo "extension=mongodb.so" >> /etc/php/8.3/cli/php.ini \
+    && sed -i "/extension=mongodb.so/d" /etc/php/8.3/fpm/php.ini \
+    && echo "extension=mongodb.so" >> /etc/php/8.3/fpm/php.ini \
+    && sed -i "/extension=pgsql.so/d" /etc/php/8.3/cli/php.ini \
+    && echo "extension=pgsql.so" >> /etc/php/8.3/cli/php.ini \
+    && sed -i "/extension=pgsql.so/d" /etc/php/8.3/fpm/php.ini \
+    && echo "extension=pgsql.so" >> /etc/php/8.3/fpm/php.ini \
+    && sed -i "/extension=sqlite3.so/d" /etc/php/8.3/cli/php.ini \
+    && echo "extension=sqlite3.so" >> /etc/php/8.3/cli/php.ini \
+    && sed -i "/extension=sqlite3.so/d" /etc/php/8.3/fpm/php.ini \
+    && echo "extension=sqlite3.so" >> /etc/php/8.3/fpm/php.ini \
+    && sed -i "/extension=xdebug.so/d" /etc/php/8.3/cli/php.ini \
+    && echo "extension=xdebug.so" >> /etc/php/8.3/cli/php.ini \
+    && sed -i "/extension=xdebug.so/d" /etc/php/8.3/fpm/php.ini \
+    && echo "extension=xdebug.so" >> /etc/php/8.3/fpm/php.ini \
     && sed -i -e "s/;daemonize\s*=\s*yes/daemonize = no/g" /etc/php/8.3/fpm/php-fpm.conf \
     && sed -i -e "s/;catch_workers_output\s*=\s*yes/catch_workers_output = yes/g" /etc/php/8.3/fpm/pool.d/www.conf \
     && sed -i -e "s/pm.max_children = 5/pm.max_children = 9/g" /etc/php/8.3/fpm/pool.d/www.conf \
@@ -91,22 +112,10 @@ RUN sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/8.3/cli/ph
     # SSH server
     && mkdir -p /var/run/sshd \
     # Allow root login via password
-    && sed -ri 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' /etc/ssh/sshd_config
-
-
-RUN mkdir -p /run/php/ && chown -Rf www-data.www-data /run/php
-
-# install composer
-RUN curl -sS https://getcomposer.org/installer | php && \
-    mv composer.phar /usr/local/bin/composer && \
-    printf "\nPATH=\"~/.composer/vendor/bin:\$PATH\"\n" | tee -a ~/.bashrc
-
-# install sqlite
-RUN apt-get install -y sqlite3 libsqlite3-dev \
-    # install mysql
+    && sed -ri 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' /etc/ssh/sshd_config && \
+    # mysql configur
     echo mysql-server mysql-server/root_password password $DB_PASS | debconf-set-selections; \
     echo mysql-server mysql-server/root_password_again password $DB_PASS | debconf-set-selections; \
-    apt-get install -y mysql-server default-libmysqlclient-dev && \
     echo "[mysqld]" >> /etc/mysql/my.cnf && \
     echo "default_password_lifetime = 0" >> /etc/mysql/my.cnf && \
     sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/my.cnf \
@@ -126,10 +135,6 @@ RUN apt-get install -y sqlite3 libsqlite3-dev \
 
 VOLUME ["/var/lib/mysql"]
 
-
-# install nodejs
-RUN apt-get install -y nodejs
-
 #install laravel installer
 RUN composer global require "laravel/installer"
 
@@ -139,19 +144,12 @@ RUN composer global require "laravel/installer"
 # install bower
 #RUN /usr/bin/npm install -g bower
 
-# install redis
-RUN apt-get install -y redis-server
-
 # install blackfire
 #RUN apt-get install -y blackfire-agent blackfire-php
 
 # install supervisor
-RUN apt-get install -y supervisor && mkdir -p /var/log/supervisor
+RUN mkdir -p /var/log/supervisor
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-# copy supervisor config file to start openssh-server
-#COPY openssh-server.conf /etc/supervisor/conf.d/openssh-server.conf
-
-
 
 VOLUME ["/var/log/supervisor"]
 
