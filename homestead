@@ -13,9 +13,9 @@ server {
     location = /favicon.ico { access_log off; log_not_found off; }
     location = /robots.txt  { access_log off; log_not_found off; }
 
-    access_log off;
+    access_log on;
     error_log  /var/log/nginx/app-error.log error;
-    sendfile off;
+    sendfile on;
     client_max_body_size 100m;
 
     location ~ \.php$ {
