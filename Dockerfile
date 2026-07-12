@@ -1,4 +1,4 @@
-FROM ubuntu:latest
+FROM ubuntu:22.04
 LABEL maintainer="MD ARIFUL HAQUE <mah.shamim@gmail.com>"
 
 # set some environment variables
@@ -16,10 +16,10 @@ RUN apt-get update && apt-get upgrade -y
 # install some prerequisites
 #RUN apt-get update && apt-get install -y --no-install-recommends apt-utils
 
-RUN apt-get install -y software-properties-common curl \
-    build-essential dos2unix gcc git libmcrypt4 libpcre3-dev python3-pip wget zip \
+RUN apt-get update && apt-get install -y --no-install-recommends software-properties-common curl \
+    build-essential dos2unix gcc git python3-pip wget zip \
     unattended-upgrades whois vim debconf-utils libnotify-bin locales \
-    cron libpng-dev unzip memcached make
+    cron libpng-dev unzip memcached make lsb-release ca-certificates gnupg
 
 # add some repositories
 #RUN curl --silent --location https://deb.nodesource.com/setup_18.x | bash - && \
@@ -53,10 +53,10 @@ VOLUME ["/var/cache/nginx"]
 VOLUME ["/var/log/nginx"]
 
 # install php
-RUN add-apt-repository ppa:ondrej/php && \
-    apt-get install -y php php-fpm php-mysql php-curl php-json php-cgi php-mbstring php-xmlrpc \
-    php-soap php-gd php-xml php-intl php-cli php-zip php-xdebug php-common php-imap php-readline \
-    php-bcmath php-imagick php-ldap php-bz2 php-pgsql php8.2-opcache
+RUN add-apt-repository ppa:ondrej/php && apt-get update && \
+    apt-get install -y php8.2 php8.2-fpm php8.2-mysql php8.2-curl php8.2-mbstring php8.2-gd \
+    php8.2-xml php8.2-intl php8.2-cli php8.2-zip php8.2-xdebug php8.2-imap php8.2-readline \
+    php8.2-bcmath php8.2-imagick php8.2-ldap php8.2-bz2 php8.2-pgsql php8.2-opcache php8.2-gmp
     
 COPY fastcgi_params /etc/nginx/
 RUN sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/8.2/cli/php.ini \
@@ -96,22 +96,15 @@ RUN curl -sS https://getcomposer.org/installer | php && \
 RUN apt-get install -y sqlite3 libsqlite3-dev
 
 # install mysql
-RUN echo mysql-server mysql-server/root_password password $DB_PASS | debconf-set-selections; \
-    echo mysql-server mysql-server/root_password_again password $DB_PASS | debconf-set-selections; \
-    apt-get install -y mysql-server && \
-    echo "[mysqld]" >> /etc/mysql/my.cnf && \
-    echo "default_password_lifetime = 0" >> /etc/mysql/my.cnf && \
-    sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/my.cnf && \
-    sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf && \
-    find /var/lib/mysql -exec touch {} \; \
-    && service mysql start \
-    && sleep 10s \
-    && echo "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'secret'; \
-    GRANT ALL ON *.* TO root@localhost; \
-    CREATE USER 'homestead'@'%' IDENTIFIED BY 'secret'; \
-    GRANT ALL ON *.* TO 'homestead'@'%'; \
-    FLUSH PRIVILEGES; \
-    CREATE DATABASE homestead;" | mysql
+ENV DB_PASS=secret
+RUN apt-get install -y mariadb-server && \
+    service mariadb start && \
+    sleep 10s && \
+    mysql -uroot -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('${DB_PASS}'); \
+    CREATE DATABASE IF NOT EXISTS homestead; \
+    CREATE USER IF NOT EXISTS 'homestead'@'%' IDENTIFIED BY '${DB_PASS}'; \
+    GRANT ALL PRIVILEGES ON *.* TO 'homestead'@'%'; \
+    FLUSH PRIVILEGES;"
 #    GRANT ALL ON *.* TO root@'0.0.0.0' IDENTIFIED BY 'secret' WITH GRANT OPTION; \
 #    CREATE USER 'homestead'@'0.0.0.0' IDENTIFIED BY 'secret'; \
 #    GRANT ALL ON *.* TO 'homestead'@'0.0.0.0' IDENTIFIED BY 'secret' WITH GRANT OPTION; \
