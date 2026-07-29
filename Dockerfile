@@ -8,19 +8,20 @@ ENV LANG=en_US.UTF-8 \
     DEBIAN_FRONTEND=noninteractive \
     APP_NAME=app \
     APP_EMAIL=app@example.com \
-    APP_DOMAIN=app.dev
+    APP_DOMAIN=app.dev \
+    DB_PASS=secret
 
 # Set root password to root, format is 'user:password'.
 RUN echo 'root:root' | chpasswd && \
     # upgrade the container \
     apt-get update && apt-get upgrade -y && \
-    # install some prerequisites
+    # install some prerequisites \
     apt-get update && apt-get install -y --no-install-recommends apt-utils software-properties-common curl \
     build-essential dos2unix gcc git libmcrypt4 libpcre3-dev python3-pip wget zip \
     unattended-upgrades whois vim debconf-utils libnotify-bin locales \
     cron libpng-dev unzip memcached make nodejs nginx openssh-server redis-server supervisor \
     sqlite3 libsqlite3-dev mysql-server libmysqlclient-dev libffi-dev && \
-    # install php8.3
+    # install php8.3 \
     add-apt-repository ppa:ondrej/php && \
     apt-get install -y php8.3 php8.3-amqp php8.3-ast php8.3-bcmath php8.3-bz2 php8.3-cgi php8.3-cli php8.3-common php8.3-curl \
     php8.3-dba php8.3-dev php8.3-ds php8.3-enchant php8.3-exif \
@@ -46,7 +47,7 @@ RUN echo 'root:root' | chpasswd && \
     wordpress-shibboleth wordpress-xrds-simple \
     php8.3-mysqli php8.3-tokenizer && \
     mkdir -p /run/php/ && chown -Rf www-data.www-data /run/php && \
-    #php8.3-oci8 php-sysvshm php8.3-gmagick php-symfony
+    #php8.3-oci8 php-sysvshm php8.3-gmagick php-symfony \
     # install composer
     curl -sS https://getcomposer.org/installer | php && \
     mv composer.phar /usr/local/bin/composer && \
@@ -109,13 +110,13 @@ RUN sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/8.3/cli/ph
     && sed -i -e "s/pm.max_requests = 500/pm.max_requests = 200/g" /etc/php/8.3/fpm/pool.d/www.conf \
     && sed -i -e "s/;listen.mode = 0660/listen.mode = 0750/g" /etc/php/8.3/fpm/pool.d/www.conf \
     && find /etc/php/8.3/cli/conf.d/ -name "*.ini" -exec sed -i -re 's/^(\s*)#(.*)/\1;\2/g' {} \; \
-    # SSH server
+    # SSH server \
     && mkdir -p /var/run/sshd \
-    # Allow root login via password
+    # Allow root login via password \
     && sed -ri 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' /etc/ssh/sshd_config && \
-    # mysql configur
-    echo mysql-server mysql-server/root_password password $DB_PASS | debconf-set-selections; \
-    echo mysql-server mysql-server/root_password_again password $DB_PASS | debconf-set-selections; \
+    # mysql configur \
+    echo mysql-server mysql-server/root_password password ${DB_PASS} | debconf-set-selections; \
+    echo mysql-server mysql-server/root_password_again password ${DB_PASS} | debconf-set-selections; \
     echo "[mysqld]" >> /etc/mysql/my.cnf && \
     echo "default_password_lifetime = 0" >> /etc/mysql/my.cnf && \
     sed -i '/^bind-address/s/bind-address.*=.*/bind-address = 0.0.0.0/' /etc/mysql/my.cnf \
@@ -128,7 +129,7 @@ RUN sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/8.3/cli/ph
     && sleep 10s \
     && echo "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '12345678'; \
     GRANT ALL ON *.* TO root@localhost; \
-    CREATE USER 'homestead'@'%' IDENTIFIED BY 'secret'; \
+    CREATE USER 'homestead'@'%' IDENTIFIED BY '${DB_PASS}'; \
     GRANT ALL ON *.* TO 'homestead'@'%'; \
     FLUSH PRIVILEGES; \
     CREATE DATABASE homestead;" | mysql
