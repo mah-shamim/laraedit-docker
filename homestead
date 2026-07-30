@@ -1,5 +1,6 @@
 server {
     listen 80 default_server;
+    listen [::]:80 default_server;
 
     server_name app.dev;
     root /var/www/html/app/public;
@@ -34,5 +35,10 @@ server {
 
     location ~ /\.ht {
         deny all;
+    }
+
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
     }
 }
